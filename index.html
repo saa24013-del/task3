@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>タスク管理アプリ (Task3)</title>
+  <style>
+    :root {
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --bg: #f3f4f6;
+      --card-bg: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 500px;
+      background: var(--card-bg);
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      margin-top: 0;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .auth-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 20px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .user-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    button {
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    button:hover {
+      background-color: var(--primary-hover);
+    }
+
+    button.secondary {
+      background-color: #e5e7eb;
+      color: #374151;
+    }
+
+    button.secondary:hover {
+      background-color: #d1d5db;
+    }
+
+    button.danger {
+      background-color: #ef4444;
+      padding: 6px 12px;
+      font-size: 0.85rem;
+    }
+
+    button.danger:hover {
+      background-color: #dc2626;
+    }
+
+    .todo-form {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      outline: none;
+    }
+
+    input[type="text"]:focus {
+      border-color: var(--primary);
+    }
+
+    .todo-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .todo-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    .todo-item label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      flex: 1;
+    }
+
+    .todo-item.completed span {
+      text-decoration: line-through;
+      color: var(--muted);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>タスク管理 (Task3)</h1>
+
+    <div class="auth-section">
+      <div id="logged-out-view">
+        <p style="text-align: center; color: var(--muted); margin-bottom: 12px;">ログインしてタスクを同期・保存します</p>
+        <div style="display: flex; gap: 10px;">
+          <button id="btn-login-google" style="flex: 1;">Googleでログイン</button>
+          <button id="btn-login-anon" class="secondary" style="flex: 1;">ゲスト利用</button>
+        </div>
+      </div>
+
+      <div id="logged-in-view" class="hidden">
+        <div class="user-info">
+          <span id="user-display">---</span>
+          <button id="btn-logout" class="secondary">ログアウト</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="app-content" class="hidden">
+      <form id="todo-form" class="todo-form">
+        <input type="text" id="todo-input" placeholder="新しいタスクを入力..." required>
+        <button type="submit">追加</button>
+      </form>
+
+      <ul id="todo-list" class="todo-list"></ul>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
+    import { 
+      getAuth, 
+      signInWithPopup, 
+      GoogleAuthProvider, 
+      signInAnonymously, 
+      signOut, 
+      onAuthStateChanged 
+    } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
+    import { 
+      getFirestore, 
+      collection, 
+      addDoc, 
+      deleteDoc, 
+      updateDoc, 
+      doc, 
+      query, 
+      where, 
+      orderBy, 
+      onSnapshot, 
+      serverTimestamp 
+    } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+
+    // プロジェクト「task3-56f34」の設定情報
+    const firebaseConfig = {
+      apiKey: "AIzaSyBLnGHzWCR3EksNgONFMMivyXydtLipc6k",
+      authDomain: "task3-56f34.firebaseapp.com",
+      projectId: "task3-56f34",
+      storageBucket: "task3-56f34.firebasestorage.app",
+      messagingSenderId: "940130361244",
+      appId: "1:940130361244:web:2ad686001cb66c683fb259"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const loggedOutView = document.getElementById("logged-out-view");
+    const loggedInView = document.getElementById("logged-in-view");
+    const appContent = document.getElementById("app-content");
+    const userDisplay = document.getElementById("user-display");
+    const btnLoginGoogle = document.getElementById("btn-login-google");
+    const btnLoginAnon = document.getElementById("btn-login-anon");
+    const btnLogout = document.getElementById("btn-logout");
+    const todoForm = document.getElementById("todo-form");
+    const todoInput = document.getElementById("todo-input");
+    const todoList = document.getElementById("todo-list");
+
+    let currentUser = null;
+    let unsubscribeTodos = null;
+
+    btnLoginGoogle.addEventListener("click", async () => {
+      const provider = new GoogleAuthProvider();
+      try {
+        await signInWithPopup(auth, provider);
+      } catch (error) {
+        console.error("Googleログインエラー:", error);
+        alert("ログインに失敗しました");
+      }
+    });
+
+    btnLoginAnon.addEventListener("click", async () => {
+      try {
+        await signInAnonymously(auth);
+      } catch (error) {
+        console.error("匿名ログインエラー:", error);
+        alert("ゲストログインに失敗しました");
+      }
+    });
+
+    btnLogout.addEventListener("click", () => {
+      signOut(auth);
+    });
+
+    onAuthStateChanged(auth, (user) => {
+      currentUser = user;
+      if (user) {
+        loggedOutView.classList.add("hidden");
+        loggedInView.classList.remove("hidden");
+        appContent.classList.remove("hidden");
+
+        userDisplay.textContent = user.isAnonymous 
+          ? "ゲストユーザー" 
+          : `${user.displayName || user.email}`;
+
+        subscribeTodos(user.uid);
+      } else {
+        loggedOutView.classList.remove("hidden");
+        loggedInView.classList.add("hidden");
+        appContent.classList.add("hidden");
+        todoList.innerHTML = "";
+
+        if (unsubscribeTodos) unsubscribeTodos();
+      }
+    });
+
+    function subscribeTodos(uid) {
+      if (unsubscribeTodos) unsubscribeTodos();
+
+      const q = query(
+        collection(db, "todos"),
+        where("uid", "==", uid),
+        orderBy("createdAt", "desc")
+      );
+
+      unsubscribeTodos = onSnapshot(q, (snapshot) => {
+        todoList.innerHTML = "";
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          renderTodoItem(docSnap.id, data);
+        });
+      }, (error) => {
+        console.error("Firestoreデータ取得エラー:", error);
+      });
+    }
+
+    todoForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const title = todoInput.value.trim();
+      if (!title || !currentUser) return;
+
+      try {
+        await addDoc(collection(db, "todos"), {
+          title: title,
+          completed: false,
+          uid: currentUser.uid,
+          createdAt: serverTimestamp()
+        });
+        todoInput.value = "";
+      } catch (error) {
+        console.error("タスク追加エラー:", error);
+      }
+    });
+
+    function renderTodoItem(id, data) {
+      const li = document.createElement("li");
+      li.className = `todo-item ${data.completed ? "completed" : ""}`;
+
+      const label = document.createElement("label");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = data.completed;
+      checkbox.addEventListener("change", () => toggleTodo(id, !data.completed));
+
+      const span = document.createElement("span");
+      span.textContent = data.title;
+
+      label.appendChild(checkbox);
+      label.appendChild(span);
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.textContent = "削除";
+      deleteBtn.className = "danger";
+      deleteBtn.addEventListener("click", () => deleteTodo(id));
+
+      li.appendChild(label);
+      li.appendChild(deleteBtn);
+      todoList.appendChild(li);
+    }
+
+    async function toggleTodo(id, completed) {
+      try {
+        await updateDoc(doc(db, "todos", id), { completed });
+      } catch (error) {
+        console.error("更新エラー:", error);
+      }
+    }
+
+    async function deleteTodo(id) {
+      try {
+        await deleteDoc(doc(db, "todos", id));
+      } catch (error) {
+        console.error("削除エラー:", error);
+      }
+    }
+  </script>
+</body>
+</html>
